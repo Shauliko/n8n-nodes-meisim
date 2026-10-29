@@ -1,0 +1,64 @@
+{
+  "name": "n8n-nodes-meisim",
+  "version": "0.1.0",
+  "description": "n8n nodes for MeiSIM USA: real US mobile numbers for AI agents and apps. Send and receive texts, manage lines, order numbers, get your SIP login.",
+  "keywords": [
+    "n8n-community-node-package",
+    "sms",
+    "text message",
+    "phone number",
+    "us number",
+    "ai agent",
+    "voice agent",
+    "t-mobile",
+    "esim",
+    "meisim"
+  ],
+  "license": "MIT",
+  "homepage": "https://www.meisimusa.com/api-for-ai-agents.html",
+  "author": {
+    "name": "MeiSIM USA",
+    "email": "support@meisimusa.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shauliko/n8n-nodes-meisim.git"
+  },
+  "engines": {
+    "node": ">=18.10"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && node scripts/copy-icons.js",
+    "dev": "tsc --watch",
+    "lint": "eslint nodes credentials package.json",
+    "lintfix": "eslint nodes credentials package.json --fix",
+    "test": "node scripts/smoke-test.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/MeisimApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Meisim/Meisim.node.js",
+      "dist/nodes/Meisim/MeisimTrigger.node.js",
+      "dist/nodes/Meisim/MeisimPollTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-n8n-nodes-base": "^1.16.3",
+    "n8n-workflow": "^1.82.0",
+    "typescript": "^5.5.4"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
