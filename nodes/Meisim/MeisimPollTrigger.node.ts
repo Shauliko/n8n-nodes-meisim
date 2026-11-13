@@ -1,9 +1,10 @@
-import type {
-	IDataObject,
-	INodeExecutionData,
-	INodeType,
-	INodeTypeDescription,
-	IPollFunctions,
+import {
+	NodeConnectionTypes,
+	type IDataObject,
+	type INodeExecutionData,
+	type INodeType,
+	type INodeTypeDescription,
+	type IPollFunctions,
 } from 'n8n-workflow';
 
 const digits10 = (v: unknown) => String(v ?? '').replace(/\D/g, '').slice(-10);
@@ -12,15 +13,16 @@ export class MeisimPollTrigger implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'MeiSIM USA Poll Trigger',
 		name: 'meisimPollTrigger',
-		icon: 'file:meisim.svg',
+		icon: { light: 'file:../../icons/meisim.svg', dark: 'file:../../icons/meisim.dark.svg' },
 		group: ['trigger'],
 		version: 1,
 		polling: true,
+		subtitle: '={{ $parameter["number"] ? "Texts to " + $parameter["number"] : "Texts to every number" }}',
 		description:
 			'Checks your MeiSIM numbers for new texts on a schedule. No webhook needed, so it leaves your account webhook alone.',
 		defaults: { name: 'MeiSIM USA Poll Trigger' },
 		inputs: [],
-		outputs: ['main'],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [{ name: 'meisimApi', required: true }],
 		properties: [
 			{

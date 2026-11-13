@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-meisim",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n nodes for MeiSIM USA: real US mobile numbers for AI agents and apps. Send and receive texts, manage lines, order numbers, get your SIP login.",
   "keywords": [
     "n8n-community-node-package",
@@ -29,18 +29,21 @@
   },
   "main": "index.js",
   "scripts": {
-    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && node scripts/copy-icons.js",
-    "dev": "tsc --watch",
-    "lint": "eslint nodes credentials package.json",
-    "lintfix": "eslint nodes credentials package.json --fix",
+    "build": "n8n-node build",
+    "build:watch": "tsc --watch",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
     "test": "node scripts/smoke-test.js",
-    "prepublishOnly": "npm run build && npm test"
+    "release": "n8n-node release",
+    "prepublishOnly": "n8n-node prerelease && npm test"
   },
   "files": [
     "dist"
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
+    "strict": true,
     "credentials": [
       "dist/credentials/MeisimApi.credentials.js"
     ],
@@ -51,10 +54,9 @@
     ]
   },
   "devDependencies": {
+    "@n8n/node-cli": "^0.56.3",
     "@types/node": "^20.14.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.0",
-    "eslint-plugin-n8n-nodes-base": "^1.16.3",
+    "eslint": "^9.39.4",
     "n8n-workflow": "^1.82.0",
     "typescript": "^5.5.4"
   },

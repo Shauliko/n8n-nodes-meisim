@@ -1,4 +1,4 @@
-import type { INodeType, INodeTypeDescription } from 'n8n-workflow';
+import { NodeConnectionTypes, type INodeType, type INodeTypeDescription } from 'n8n-workflow';
 
 // A number as the API wants it: ten digits, no +1, no punctuation.
 const NUMBER_IN_URL = '{{ $parameter["number"].toString().replace(/\\D/g, "").slice(-10) }}';
@@ -7,15 +7,16 @@ export class Meisim implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'MeiSIM USA',
 		name: 'meisim',
-		icon: 'file:meisim.svg',
+		icon: { light: 'file:../../icons/meisim.svg', dark: 'file:../../icons/meisim.dark.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{ $parameter["operation"] + ": " + $parameter["resource"] }}',
 		description:
 			'Real US mobile numbers for AI agents and apps: send and read texts, manage your lines, order numbers',
 		defaults: { name: 'MeiSIM USA' },
-		inputs: ['main'],
-		outputs: ['main'],
+		usableAsTool: true,
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [{ name: 'meisimApi', required: true }],
 		requestDefaults: {
 			baseURL: '={{ $credentials.baseUrl }}',

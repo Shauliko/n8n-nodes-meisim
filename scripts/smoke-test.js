@@ -4,6 +4,7 @@
 // delivery, a forged one, the number filter, and a polling cycle.
 const assert = require('assert');
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 
 const dist = path.join(__dirname, '..', 'dist');
@@ -33,10 +34,40 @@ const bodyProps = node.properties.filter((p) => p.routing && p.routing.send && p
 ok(bodyProps.includes('to') && bodyProps.includes('message') && bodyProps.includes('count') && bodyProps.includes('webhook_url'), 'body fields route');
 ok(node.properties.every((p) => !/—/.test(JSON.stringify(p))), 'no em dashes in the UI text');
 for (const p of node.properties) if (p.name === 'limit') ok(p.description === 'Max number of results to return', 'limit description as n8n wants it');
+ok(node.usableAsTool === true, 'an AI agent node can use it as a tool');
+ok(node.inputs.join() === 'main' && node.outputs.join() === 'main', 'one main input and one main output');
+
+// Every icon a node or the credential names is a file in the package, light and dark.
+const iconFile = (fromFile, ref) => path.join(path.dirname(fromFile), String(ref).replace(/^file:/, ''));
+const iconOwners = [
+	[path.join(dist, 'credentials', 'MeisimApi.credentials.js'), cred.icon],
+	[path.join(dist, 'nodes', 'Meisim', 'Meisim.node.js'), node.icon],
+	[path.join(dist, 'nodes', 'Meisim', 'MeisimTrigger.node.js'), new MeisimTrigger().description.icon],
+	[path.join(dist, 'nodes', 'Meisim', 'MeisimPollTrigger.node.js'), new MeisimPollTrigger().description.icon],
+];
+for (const [file, icon] of iconOwners) {
+	ok(icon && /^file:/.test(icon.light) && /^file:/.test(icon.dark), 'light and dark icon named in ' + path.basename(file));
+	for (const ref of [icon.light, icon.dark]) {
+		const f = iconFile(file, ref);
+		ok(fs.existsSync(f) && /<svg/.test(fs.readFileSync(f, 'utf8')), 'icon file is in the package: ' + path.relative(dist, f));
+	}
+}
+// Where each node sits in n8n's panel and where its docs are.
+for (const name of ['Meisim', 'MeisimTrigger', 'MeisimPollTrigger']) {
+	const codex = JSON.parse(fs.readFileSync(path.join(dist, 'nodes', 'Meisim', name + '.node.json'), 'utf8'));
+	ok(codex.categories[0] === 'Communication' && /^https:\/\/github\.com\/Shauliko\/n8n-nodes-meisim/.test(codex.resources.primaryDocumentation[0].url), name + ' has its panel entry');
+}
+// What the package tells n8n to load is what the build made.
+const pkg = require(path.join(__dirname, '..', 'package.json'));
+for (const f of [...pkg.n8n.nodes, ...pkg.n8n.credentials]) ok(fs.existsSync(path.join(__dirname, '..', f)), 'listed in package.json and built: ' + f);
+ok(pkg.n8n.strict === true && !pkg.dependencies, 'strict mode on, no run-time dependencies');
+const uiText = JSON.stringify([node, new MeisimTrigger().description, new MeisimPollTrigger().description, cred.properties]);
+ok(!/—/.test(uiText) && !/\bzap/i.test(uiText), 'no em dash and no other product named in any UI text');
 
 // ── instant trigger ──────────────────────────────────────────────────────────
 const trig = new MeisimTrigger();
 ok(trig.description.webhooks[0].httpMethod === 'POST' && trig.description.polling === undefined, 'instant trigger is a webhook node');
+ok(/number/.test(trig.description.subtitle) && trig.description.outputs.join() === 'main' && trig.description.inputs.length === 0, 'instant trigger has a subtitle, no input, one output');
 
 function webhookCtx({ body, secret, signature, number = '' }) {
 	const raw = JSON.stringify(body);
@@ -77,36 +108,89 @@ const good = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).di
 	out = await trig.webhook.call(c.ctx);
 	ok(!out.workflowData && !out.noWebhookResponse, 'another number is acknowledged and not run');
 
-	// webhook lifecycle against a fake API
-	const api = { webhook_url: null, calls: [] };
-	const hookCtx = (url) => ({
+	// webhook lifecycle against a fake API: each workflow its own subscription
+	// (POST/GET/DELETE /api/v1/sms/webhooks), the main webhook as the fallback.
+	const api = { multi: true, down: false, webhook_url: null, subs: [], calls: [], n: 0 };
+	const httpError = (status, code) => Object.assign(new Error('HTTP ' + status), { httpCode: String(status), cause: { response: { status, data: { code } } } });
+	const logs = [];
+	const hookCtx = (url, number = '') => ({
+		getNode: () => ({ id: 't1', name: 'MeiSIM USA Trigger', type: 'n8n-nodes-meisim.meisimTrigger', typeVersion: 1, position: [0, 0], parameters: {} }),
+		logger: { warn: (m) => logs.push(String(m)) },
 		getNodeWebhookUrl: () => url,
+		getNodeParameter: (name, dflt) => (name === 'number' ? number : dflt),
 		getCredentials: async () => ({ apiKey: 'k', baseUrl: 'https://api.example.test/' }),
 		getWorkflowStaticData: () => hookCtx.data,
 		helpers: {
 			httpRequestWithAuthentication: async function (_cred, opts) {
 				api.calls.push(opts.method + ' ' + opts.url + ' ' + JSON.stringify(opts.body || {}));
+				const path = opts.url.replace('https://api.example.test', '');
+				if (api.down) throw httpError(500, 'server_error');
+				if (path.startsWith('/api/v1/sms/webhooks')) {
+					if (!api.multi) throw httpError(503, 'NOT_ENABLED');
+					if (opts.method === 'GET') return { ok: true, enabled: true, webhooks: api.subs.map((x) => ({ id: x.id, webhook_url: x.url, number: x.number })) };
+					if (opts.method === 'POST') {
+						const sub = { id: 'sub-' + ++api.n, url: opts.body.webhook_url, number: opts.body.number || null, source: opts.body.source };
+						api.subs.push(sub);
+						return { ok: true, id: sub.id, webhook_url: sub.url, signing_secret: 'sec-' + sub.id };
+					}
+					if (opts.method === 'DELETE') {
+						const id = decodeURIComponent(path.split('/').pop());
+						const before = api.subs.length;
+						api.subs = api.subs.filter((x) => x.id !== id);
+						if (api.subs.length === before) throw httpError(404, 'not_found');
+						return { ok: true, deleted: true, id };
+					}
+				}
 				if (opts.method === 'GET') return { ok: true, webhook_url: api.webhook_url };
 				api.webhook_url = opts.body.webhook_url || null;
-				return { ok: true, webhook_url: api.webhook_url, signing_secret: api.webhook_url ? 'sec-1' : null };
+				return { ok: true, webhook_url: api.webhook_url, signing_secret: api.webhook_url ? 'sec-main' : null };
 			},
 		},
 	});
-	hookCtx.data = {};
 	const h = trig.webhookMethods.default;
+	hookCtx.data = {};
 	ok((await h.checkExists.call(hookCtx('https://n8n.test/webhook/1'))) === false, 'nothing registered yet');
-	ok((await h.create.call(hookCtx('https://n8n.test/webhook/1'))) === true && hookCtx.data.secret === 'sec-1', 'create registers n8n and keeps the secret');
-	ok(api.calls.some((x) => x.startsWith('POST https://api.example.test/api/v1/sms/webhook {"webhook_url":"https://n8n.test/webhook/1","format":"meisim"}')), 'create posts the n8n URL in meisim format');
+	ok((await h.create.call(hookCtx('https://n8n.test/webhook/1', '+1 212 555 0100'))) === true && hookCtx.data.subId === 'sub-1' && hookCtx.data.secret === 'sec-sub-1', 'create makes its own subscription and keeps its secret');
+	ok(api.subs[0].source === 'n8n' && api.subs[0].number === '2125550100', 'the subscription says n8n and carries the number filter');
+	ok(api.webhook_url === null, 'the main webhook is left alone');
 	ok((await h.checkExists.call(hookCtx('https://n8n.test/webhook/1'))) === true, 'then it exists');
+	const first = hookCtx.data;
+	hookCtx.data = {};
+	ok((await h.create.call(hookCtx('https://n8n.test/webhook/2'))) === true && api.subs.length === 2, 'a second workflow gets a second subscription, the first is kept');
+	hookCtx.data = first;
+	ok((await h.delete.call(hookCtx('https://n8n.test/webhook/1'))) === true && api.subs.length === 1 && api.subs[0].url === 'https://n8n.test/webhook/2' && !hookCtx.data.subId, 'delete removes only its own subscription');
+	hookCtx.data = { subId: 'sub-gone', secret: 's' };
+	ok((await h.delete.call(hookCtx('https://n8n.test/webhook/9'))) === true, 'a subscription already gone (404) is not an error');
+
+	// the API failing for another reason: activation says so, deactivation logs it
+	api.down = true;
+	hookCtx.data = {};
+	let thrown = null;
+	try { await h.create.call(hookCtx('https://n8n.test/webhook/7')); } catch (e) { thrown = e; }
+	ok(thrown && thrown.constructor.name === 'NodeApiError' && !hookCtx.data.subId && !hookCtx.data.secret, 'a failing API stops activation with an n8n API error, nothing is remembered');
+	ok(!api.calls.some((x) => x.includes('/api/v1/sms/webhook {"webhook_url":"https://n8n.test/webhook/7"')), 'and it does not fall back to the main webhook');
+	hookCtx.data = { subId: 'sub-2', secret: 's', url: 'https://n8n.test/webhook/2' };
+	logs.length = 0;
+	ok((await h.delete.call(hookCtx('https://n8n.test/webhook/2'))) === false && hookCtx.data.subId === 'sub-2' && logs.length === 1 && /could not be removed/.test(logs[0]), 'a failing API on deactivation is logged, and the subscription is still remembered');
+	api.down = false;
+	ok((await h.delete.call(hookCtx('https://n8n.test/webhook/2'))) === true && api.subs.length === 0 && !hookCtx.data.subId, 'the next deactivation removes it');
+
+	// before the account side is switched on: the main webhook, as in 0.1.0
+	api.multi = false;
+	hookCtx.data = {};
+	ok((await h.create.call(hookCtx('https://n8n.test/webhook/3'))) === true && !hookCtx.data.subId && hookCtx.data.secret === 'sec-main', 'NOT_ENABLED falls back to the main webhook');
+	ok(api.calls.some((x) => x.startsWith('POST https://api.example.test/api/v1/sms/webhook {"webhook_url":"https://n8n.test/webhook/3","format":"meisim"}')), 'the fallback posts the n8n URL in meisim format');
+	ok((await h.checkExists.call(hookCtx('https://n8n.test/webhook/3'))) === true, 'the fallback exists');
 	api.webhook_url = 'https://elsewhere.test/hook';
-	ok((await h.delete.call(hookCtx('https://n8n.test/webhook/1'))) === true && api.webhook_url === 'https://elsewhere.test/hook', 'delete leaves a webhook somebody else set');
-	api.webhook_url = 'https://n8n.test/webhook/1';
-	hookCtx.data = { secret: 'sec-1' };
-	ok((await h.delete.call(hookCtx('https://n8n.test/webhook/1'))) === true && api.webhook_url === null && !hookCtx.data.secret, 'delete clears our own webhook and the secret');
+	ok((await h.delete.call(hookCtx('https://n8n.test/webhook/3'))) === true && api.webhook_url === 'https://elsewhere.test/hook', 'delete leaves a main webhook somebody else set');
+	api.webhook_url = 'https://n8n.test/webhook/3';
+	hookCtx.data = { secret: 'sec-main' };
+	ok((await h.delete.call(hookCtx('https://n8n.test/webhook/3'))) === true && api.webhook_url === null && !hookCtx.data.secret, 'delete clears our own main webhook and the secret');
 
 	// ── poll trigger ───────────────────────────────────────────────────────────
 	const poll = new MeisimPollTrigger();
 	ok(poll.description.polling === true && !poll.description.webhooks, 'poll trigger is a polling node');
+	ok(/number/.test(poll.description.subtitle) && poll.description.outputs.join() === 'main', 'poll trigger has a subtitle and one output');
 	const inbox = [
 		{ id: 'm3', number: '2125550100', from: '1', text: 'three', received_at: '2026-10-29T20:03:00Z' },
 		{ id: 'm2', number: '2125550100', from: '1', text: 'two', received_at: '2026-10-29T20:02:00Z' },

@@ -1,5 +1,6 @@
 import type {
 	IAuthenticateGeneric,
+	Icon,
 	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
@@ -9,6 +10,8 @@ export class MeisimApi implements ICredentialType {
 	name = 'meisimApi';
 
 	displayName = 'MeiSIM USA API';
+
+	icon: Icon = { light: 'file:../icons/meisim.svg', dark: 'file:../icons/meisim.dark.svg' };
 
 	documentationUrl = 'https://www.meisimusa.com/api-docs.html';
 

@@ -1,23 +1,57 @@
-# Publishes to npm when a version tag is pushed (v0.1.0, v0.2.0, ...).
-# Uses npm trusted publishing (OIDC): configure this repository and workflow
-# as the trusted publisher of the package on npmjs.com once; no token needed.
-name: publish
+# Publishes this n8n community node package to npm when a version tag is pushed.
+#
+# n8n accepts a community node for verification only when it was published by
+# GitHub Actions with an npm provenance statement (its rule since May 1 2026).
+# The statement lets anyone check that the package was built by this workflow,
+# from this repository and this commit.
+#
+# Sign-in to npm is Trusted Publishing: on npmjs.com the package names this
+# repository and this file (publish.yml) as its trusted publisher, and GitHub's
+# own identity token is exchanged for a short-lived publish right. No npm token
+# is stored in this repository. It needs npm 11.5.1 or later, which Node 24 has.
+#
+# To release: set the version in package.json, commit, tag the commit with the
+# bare version (0.1.1, not v0.1.1) and push the tag.
+
+name: Publish
+
 on:
   push:
-    tags: ['v*']
-permissions:
-  contents: read
-  id-token: write
+    tags:
+      - '*.*.*'
+
 jobs:
   publish:
+    name: Publish to npm
     runs-on: ubuntu-latest
+
+    permissions:
+      # Needed to get the identity token npm exchanges and signs with.
+      id-token: write
+      contents: read
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
-      - run: npm publish --provenance --access public
+          node-version: 24
+          cache: npm
+
+      - name: The tag is the version in package.json
+        run: |
+          want="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $want"
+            exit 1
+          fi
+
+      # The development tools need none of their dependencies' install scripts.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Lints in n8n's strict mode, builds, then publishes with provenance.
+      # prepublishOnly runs the tests on the fresh build before anything is sent.
+      - name: Release
+        run: npm run release

@@ -10,6 +10,8 @@ With these nodes a workflow can:
 - order new numbers, renew them, switch auto-renew, stop the daily rate;
 - read your account and your SIP login.
 
+The MeiSIM USA node can also be given to an AI Agent node as a tool, so the agent itself sends the text or looks up a number.
+
 ## Install
 
 In n8n: Settings, Community Nodes, Install, package name `n8n-nodes-meisim`.
@@ -37,7 +39,7 @@ Create a MeiSIM USA API credential with your dealer API key. The key is on the A
 
 ### MeiSIM USA Trigger
 
-Starts the workflow when a text arrives. Activating the workflow points your account's incoming-text webhook at n8n; deactivating clears it. Every delivery is signed (`X-MeiSIM-Signature`, HMAC-SHA256 of the body) and the node refuses anything that does not verify. One account has one webhook address, so if something else already receives your texts, use the poll trigger instead.
+Starts the workflow when a text arrives. Activating the workflow adds a delivery address of its own to your MeiSIM account, and deactivating removes it. Several workflows, and your own system, can receive the same texts side by side. Every delivery is signed (`X-MeiSIM-Signature`, HMAC-SHA256 of the body) and the node refuses anything that does not verify.
 
 Each run receives one text:
 
@@ -47,7 +49,7 @@ Each run receives one text:
 
 ### MeiSIM USA Poll Trigger
 
-Checks for new texts on the schedule you set, without touching the account webhook. The first poll after activation only remembers where the inbox is, so an old inbox does not start a hundred runs at once.
+Checks for new texts on the schedule you set, without adding a delivery address to your account. The first poll after activation only remembers where the inbox is, so an old inbox does not start a hundred runs at once.
 
 ## A texting agent in three nodes
 
@@ -62,6 +64,11 @@ Checks for new texts on the schedule you set, without touching the account webho
 - Allowed contacts bind a number to up to ten US numbers it may text. Incoming texts are never affected. Type `none` to clear the list.
 - Numbers are prepaid and cannot be returned. A daily-rate number is stopped with Stop Daily Charges; a monthly number ends with its paid months unless renewed.
 - Full API reference: [api-docs](https://www.meisimusa.com/api-docs.html).
+
+## Version history
+
+- 0.1.1: every workflow with the trigger gets its own delivery address, so a second workflow no longer takes the texts away from the first. The MeiSIM USA node can be used as a tool by an AI Agent node. Light and dark icons. Published by GitHub Actions with a provenance statement.
+- 0.1.0: first release.
 
 ## License
 
