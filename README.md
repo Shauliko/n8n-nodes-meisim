@@ -49,7 +49,7 @@ Each run receives one text:
 
 ### MeiSIM USA Poll Trigger
 
-Checks for new texts on the schedule you set, without adding a delivery address to your account. The first poll after activation only remembers where the inbox is, so an old inbox does not start a hundred runs at once.
+Checks for new texts on the schedule you set, without adding a delivery address to your account. The first poll after activation only remembers where the inbox is, so an old inbox does not start a hundred runs at once. Each text comes out with the same fields as the instant trigger's, plus its `id`.
 
 ## A texting agent in three nodes
 
@@ -67,7 +67,7 @@ Checks for new texts on the schedule you set, without adding a delivery address 
 
 ## Version history
 
-- 0.1.1: every workflow with the trigger gets its own delivery address, so a second workflow no longer takes the texts away from the first. The MeiSIM USA node can be used as a tool by an AI Agent node. Light and dark icons. Built and sent to npm by GitHub Actions with a provenance statement.
+- 0.1.1: every workflow with the trigger gets its own delivery address, so a second workflow no longer takes the texts away from the first. A polled text has the same fields as an instant one (`number`, `event`). The MeiSIM USA node can be used as a tool by an AI Agent node. Light and dark icons. Built and sent to npm by GitHub Actions with a provenance statement.
 - 0.1.0: first release.
 
 ## License

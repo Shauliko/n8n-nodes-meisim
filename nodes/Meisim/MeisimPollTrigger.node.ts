@@ -9,6 +9,15 @@ import {
 
 const digits10 = (v: unknown) => String(v ?? '').replace(/\D/g, '').slice(-10);
 
+// A text from the API's list, in the shape the instant trigger gives: the
+// number that received it is `number` (the list calls it `to`) and `event`
+// says what happened. Everything the API returned stays on the item.
+const asDelivery = (m: IDataObject): IDataObject => ({
+	event: 'sms.received',
+	number: m.to ?? m.number,
+	...m,
+});
+
 export class MeisimPollTrigger implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'MeiSIM USA Poll Trigger',
@@ -57,7 +66,9 @@ export class MeisimPollTrigger implements INodeType {
 		// A manual run shows the latest texts without touching what the live
 		// trigger remembers.
 		if (this.getMode() === 'manual') {
-			return messages.length ? [this.helpers.returnJsonArray(messages.slice(0, 5))] : null;
+			return messages.length
+				? [this.helpers.returnJsonArray(messages.slice(0, 5).map(asDelivery))]
+				: null;
 		}
 
 		const newest = messages.reduce(
@@ -79,6 +90,6 @@ export class MeisimPollTrigger implements INodeType {
 		data.lastAt = newest || data.lastAt;
 		data.seenIds = [...fresh.map((m) => String(m.id)), ...seen].slice(0, 500);
 
-		return fresh.length ? [this.helpers.returnJsonArray(fresh)] : null;
+		return fresh.length ? [this.helpers.returnJsonArray(fresh.map(asDelivery))] : null;
 	}
 }

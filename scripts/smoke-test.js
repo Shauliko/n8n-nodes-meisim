@@ -192,9 +192,9 @@ const good = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).di
 	ok(poll.description.polling === true && !poll.description.webhooks, 'poll trigger is a polling node');
 	ok(/number/.test(poll.description.subtitle) && poll.description.outputs.join() === 'main', 'poll trigger has a subtitle and one output');
 	const inbox = [
-		{ id: 'm3', number: '2125550100', from: '1', text: 'three', received_at: '2026-10-29T20:03:00Z' },
-		{ id: 'm2', number: '2125550100', from: '1', text: 'two', received_at: '2026-10-29T20:02:00Z' },
-		{ id: 'm1', number: '2125550100', from: '1', text: 'one', received_at: '2026-10-29T20:01:00Z' },
+		{ id: 'm3', to: '2125550100', from: '1', text: 'three', otp: null, received_at: '2026-10-29T20:03:00Z' },
+		{ id: 'm2', to: '2125550100', from: '1', text: 'two', otp: null, received_at: '2026-10-29T20:02:00Z' },
+		{ id: 'm1', to: '2125550100', from: '1', text: 'one', otp: null, received_at: '2026-10-29T20:01:00Z' },
 	];
 	const pollCtx = (mode) => ({
 		getWorkflowStaticData: () => pollCtx.data,
@@ -213,16 +213,20 @@ const good = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).di
 	pollCtx.data = {};
 	let r = await poll.poll.call(pollCtx('manual'));
 	ok(r && r[0].length === 3 && !pollCtx.data.lastAt, 'a manual run shows the latest texts and remembers nothing');
+	ok(r[0].every((x) => x.json.event === 'sms.received' && x.json.number === '2125550100' && x.json.to === '2125550100' && x.json.id), 'a polled text has event and number like an instant delivery, and keeps what the API sent');
 	r = await poll.poll.call(pollCtx('trigger'));
 	ok(r === null && pollCtx.data.lastAt === '2026-10-29T20:03:00Z', 'first live poll remembers the newest and emits nothing');
 	r = await poll.poll.call(pollCtx('trigger'));
 	ok(r === null && pollCtx.lastQs.since === '2026-10-29T20:03:00Z', 'nothing new: asks since the newest, emits nothing');
-	inbox.unshift({ id: 'm5', number: '2125550100', from: '1', text: 'five', received_at: '2026-10-29T20:05:00Z' });
-	inbox.unshift({ id: 'm4', number: '2125550100', from: '1', text: 'four', received_at: '2026-10-29T20:04:00Z' });
+	inbox.unshift({ id: 'm5', to: '2125550100', from: '1', text: 'five', otp: null, received_at: '2026-10-29T20:05:00Z' });
+	inbox.unshift({ id: 'm4', to: '2125550100', from: '1', text: 'four', otp: null, received_at: '2026-10-29T20:04:00Z' });
 	// keep newest-first order as the API does
 	inbox.sort((a, b) => (a.received_at < b.received_at ? 1 : -1));
 	r = await poll.poll.call(pollCtx('trigger'));
 	ok(r && r[0].map((x) => x.json.text).join(',') === 'four,five', 'new texts come out oldest first');
+	// The fields the readme's three-node agent reads are on both triggers' items.
+	const deliveryKeys = Object.keys(body);
+	ok(deliveryKeys.every((k) => k in r[0][0].json), 'every field of an instant delivery is on a polled text too: ' + deliveryKeys.join(', '));
 	r = await poll.poll.call(pollCtx('trigger'));
 	ok(r === null, 'and are not emitted twice');
 
