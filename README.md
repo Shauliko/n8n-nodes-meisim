@@ -49,7 +49,7 @@ Each run receives one text:
 
 ### MeiSIM USA Poll Trigger
 
-Checks for new texts on the schedule you set, without adding a delivery address to your account. The first poll after activation only remembers where the inbox is, so an old inbox does not start a hundred runs at once. Each text comes out with the same fields as the instant trigger's, plus its `id`.
+Checks for new texts on the schedule you set, without adding a delivery address to your account. The first poll after activation only remembers where the inbox is, so an old inbox does not start a hundred runs at once. It starts over the same way when you change Only This Number. Each text comes out with the same fields as the instant trigger's, plus its `id`.
 
 ## A texting agent in three nodes
 

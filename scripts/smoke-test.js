@@ -199,13 +199,14 @@ const good = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).di
 	const pollCtx = (mode) => ({
 		getWorkflowStaticData: () => pollCtx.data,
 		getCredentials: async () => ({ apiKey: 'k', baseUrl: 'https://api.example.test' }),
-		getNodeParameter: () => '',
+		getNodeParameter: () => pollCtx.number || '',
 		getMode: () => mode,
 		helpers: {
 			httpRequestWithAuthentication: async function (_cred, opts) {
 				pollCtx.lastQs = opts.qs;
 				const since = opts.qs.since ? String(opts.qs.since) : '';
-				return { ok: true, messages: inbox.filter((m) => !since || m.received_at > since) };
+				// as the API: newest first, the number filter on the receiving number
+				return { ok: true, messages: inbox.filter((m) => (!since || m.received_at > since) && (!opts.qs.number || m.to === opts.qs.number)) };
 			},
 			returnJsonArray: (d) => (Array.isArray(d) ? d : [d]).map((json) => ({ json })),
 		},
@@ -229,6 +230,42 @@ const good = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).di
 	ok(deliveryKeys.every((k) => k in r[0][0].json), 'every field of an instant delivery is on a polled text too: ' + deliveryKeys.join(', '));
 	r = await poll.poll.call(pollCtx('trigger'));
 	ok(r === null, 'and are not emitted twice');
+	ok(pollCtx.data.filter === '', 'the position remembers the filter it was taken under (every number)');
+
+	// "Only This Number" changed on a live trigger: the texts already sitting on
+	// the number now watched are not new. Found in a real n8n, where widening the
+	// filter replayed eight old texts in one run.
+	inbox.unshift({ id: 'o2', to: '6465550111', from: '2', text: 'old two', otp: null, received_at: '2026-10-29T20:07:00Z' });
+	inbox.unshift({ id: 'o1', to: '6465550111', from: '2', text: 'old one', otp: null, received_at: '2026-10-29T20:06:00Z' });
+	inbox.sort((a, b) => (a.received_at < b.received_at ? 1 : -1));
+	pollCtx.number = '(646) 555-0111';
+	r = await poll.poll.call(pollCtx('trigger'));
+	ok(r === null && pollCtx.lastQs.since === undefined && pollCtx.lastQs.number === '6465550111', 'a changed number filter starts over: asks without since, emits nothing');
+	ok(pollCtx.data.filter === '6465550111' && pollCtx.data.lastAt === '2026-10-29T20:07:00Z' && pollCtx.data.seenIds.join() === 'o2,o1', 'and remembers the newest text on the number now watched');
+	inbox.unshift({ id: 'o3', to: '6465550111', from: '2', text: 'new on the watched number', otp: null, received_at: '2026-10-29T20:08:00Z' });
+	inbox.unshift({ id: 'x9', to: '2125550100', from: '1', text: 'new on another number', otp: null, received_at: '2026-10-29T20:09:00Z' });
+	inbox.sort((a, b) => (a.received_at < b.received_at ? 1 : -1));
+	r = await poll.poll.call(pollCtx('trigger'));
+	ok(r && r[0].length === 1 && r[0][0].json.id === 'o3' && r[0][0].json.number === '6465550111', 'then only a new text on the watched number comes out');
+	pollCtx.number = '';
+	r = await poll.poll.call(pollCtx('trigger'));
+	ok(r === null && pollCtx.data.filter === '' && pollCtx.data.lastAt === '2026-10-29T20:09:00Z', 'widening the filter to every number starts over too: nothing old is replayed');
+	inbox.unshift({ id: 'x10', to: '2125550100', from: '1', text: 'after widening', otp: null, received_at: '2026-10-29T20:10:00Z' });
+	r = await poll.poll.call(pollCtx('trigger'));
+	ok(r && r[0].map((x) => x.json.id).join() === 'x10', 'and the next new text comes out once');
+
+	// A position saved by 0.1.0, which did not remember its filter: it keeps
+	// going from where it was, nothing is skipped and nothing replayed.
+	pollCtx.number = '2125550100';
+	pollCtx.data = { lastAt: '2026-10-29T20:09:00Z', seenIds: ['x9'] };
+	r = await poll.poll.call(pollCtx('trigger'));
+	ok(r && r[0].map((x) => x.json.id).join() === 'x10' && pollCtx.data.filter === '2125550100' && pollCtx.lastQs.since === '2026-10-29T20:09:00Z', 'a position from 0.1.0 adopts the current filter and carries on');
+	// A manual run never moves the position or its filter.
+	pollCtx.number = '6465550111';
+	const before = JSON.stringify(pollCtx.data);
+	r = await poll.poll.call(pollCtx('manual'));
+	ok(JSON.stringify(pollCtx.data) === before, 'a manual run with another filter leaves the live position alone');
+	pollCtx.number = '';
 
 	console.log(`smoke-test: ${n} checks passed`);
 })().catch((e) => { console.error('smoke-test failed:', e.message); process.exit(1); });

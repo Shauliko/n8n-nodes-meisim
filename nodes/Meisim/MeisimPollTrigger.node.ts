@@ -50,10 +50,20 @@ export class MeisimPollTrigger implements INodeType {
 		const cred = (await this.getCredentials('meisimApi')) as IDataObject;
 		const base = String(cred.baseUrl || 'https://api.meisimusa.com').replace(/\/$/, '');
 		const only = digits10(this.getNodeParameter('number', '') as string);
+		const manual = this.getMode() === 'manual';
+
+		// The remembered position belongs to the filter it was taken under. A
+		// position saved before the filter was remembered keeps its filter.
+		const savedAt = typeof data.lastAt === 'string' ? data.lastAt : '';
+		if (!manual && savedAt && data.filter === undefined) data.filter = only;
+		// Start over on the first poll after activation, and when "Only This
+		// Number" was changed since: the texts already sitting on the numbers now
+		// watched are not new, and must not start a hundred runs at once.
+		const startOver = !manual && (!savedAt || data.filter !== only);
 
 		const qs: IDataObject = { limit: 200 };
 		if (only) qs.number = only;
-		if (typeof data.lastAt === 'string' && data.lastAt) qs.since = data.lastAt;
+		if (savedAt && !startOver) qs.since = savedAt;
 
 		const r = (await this.helpers.httpRequestWithAuthentication.call(this, 'meisimApi', {
 			method: 'GET',
@@ -65,7 +75,7 @@ export class MeisimPollTrigger implements INodeType {
 
 		// A manual run shows the latest texts without touching what the live
 		// trigger remembers.
-		if (this.getMode() === 'manual') {
+		if (manual) {
 			return messages.length
 				? [this.helpers.returnJsonArray(messages.slice(0, 5).map(asDelivery))]
 				: null;
@@ -73,21 +83,21 @@ export class MeisimPollTrigger implements INodeType {
 
 		const newest = messages.reduce(
 			(a, m) => (String(m.received_at || '') > a ? String(m.received_at) : a),
-			typeof data.lastAt === 'string' ? data.lastAt : '',
+			startOver ? '' : savedAt,
 		);
 
-		// First poll after activation: remember where we are, emit nothing, so an
-		// old inbox does not start a hundred runs at once.
-		if (!data.lastAt) {
+		// Remember where the inbox is and emit nothing.
+		if (startOver) {
 			data.lastAt = newest || new Date().toISOString();
 			data.seenIds = messages.map((m) => String(m.id)).slice(0, 200);
+			data.filter = only;
 			return null;
 		}
 
 		const seen = new Set(Array.isArray(data.seenIds) ? (data.seenIds as string[]) : []);
 		const fresh = messages.filter((m) => !seen.has(String(m.id)));
 		fresh.reverse(); // the API lists newest first; runs go oldest first
-		data.lastAt = newest || data.lastAt;
+		data.lastAt = newest || savedAt;
 		data.seenIds = [...fresh.map((m) => String(m.id)), ...seen].slice(0, 500);
 
 		return fresh.length ? [this.helpers.returnJsonArray(fresh.map(asDelivery))] : null;
