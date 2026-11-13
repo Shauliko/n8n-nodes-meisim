@@ -1,4 +1,4 @@
-# Publishes this n8n community node package to npm when a version tag is pushed.
+# Stages this n8n community node package on npm when a version tag is pushed.
 #
 # n8n accepts a community node for verification only when it was published by
 # GitHub Actions with an npm provenance statement (its rule since May 1 2026).
@@ -7,11 +7,17 @@
 #
 # Sign-in to npm is Trusted Publishing: on npmjs.com the package names this
 # repository and this file (publish.yml) as its trusted publisher, and GitHub's
-# own identity token is exchanged for a short-lived publish right. No npm token
-# is stored in this repository. It needs npm 11.5.1 or later, which Node 24 has.
+# own identity token is exchanged for a short-lived right. No npm token is
+# stored in this repository.
+#
+# The trusted publisher may stage a version, not publish it. A staged version
+# is hidden until a maintainer approves it on npmjs.com (package page, Staged
+# Packages, Approve) with two-factor sign-in, so nothing goes public from this
+# repository alone. Staging needs npm 11.15.0 or later, which Node 24 has.
 #
 # To release: set the version in package.json, commit, tag the commit with the
-# bare version (0.1.1, not v0.1.1) and push the tag.
+# bare version (0.1.1, not v0.1.1), push the tag, then approve the staged
+# version on npmjs.com.
 
 name: Publish
 
@@ -22,7 +28,7 @@ on:
 
 jobs:
   publish:
-    name: Publish to npm
+    name: Stage on npm
     runs-on: ubuntu-latest
 
     permissions:
@@ -51,7 +57,15 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      # Lints in n8n's strict mode, builds, then publishes with provenance.
+      # n8n's own check, in strict mode.
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
       # prepublishOnly runs the tests on the fresh build before anything is sent.
-      - name: Release
-        run: npm run release
+      - name: Stage on npm with a provenance statement
+        run: npm stage publish --provenance
+        env:
+          RELEASE_MODE: 'true'

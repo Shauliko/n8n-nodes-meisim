@@ -67,7 +67,7 @@ Checks for new texts on the schedule you set, without adding a delivery address 
 
 ## Version history
 
-- 0.1.1: every workflow with the trigger gets its own delivery address, so a second workflow no longer takes the texts away from the first. The MeiSIM USA node can be used as a tool by an AI Agent node. Light and dark icons. Published by GitHub Actions with a provenance statement.
+- 0.1.1: every workflow with the trigger gets its own delivery address, so a second workflow no longer takes the texts away from the first. The MeiSIM USA node can be used as a tool by an AI Agent node. Light and dark icons. Built and sent to npm by GitHub Actions with a provenance statement.
 - 0.1.0: first release.
 
 ## License
