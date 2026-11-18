@@ -1,5 +1,5 @@
 {
-	"node": "n8n-nodes-meisim",
+	"node": "n8n-nodes-meisim.meisim",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": [

@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-meisim",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "n8n nodes for MeiSIM USA: real US mobile numbers for AI agents and apps. Send and receive texts, manage lines, order numbers, get your SIP login.",
   "keywords": [
     "n8n-community-node-package",

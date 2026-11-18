@@ -56,6 +56,9 @@ for (const [file, icon] of iconOwners) {
 for (const name of ['Meisim', 'MeisimTrigger', 'MeisimPollTrigger']) {
 	const codex = JSON.parse(fs.readFileSync(path.join(dist, 'nodes', 'Meisim', name + '.node.json'), 'utf8'));
 	ok(codex.categories[0] === 'Communication' && /^https:\/\/github\.com\/Shauliko\/n8n-nodes-meisim/.test(codex.resources.primaryDocumentation[0].url), name + ' has its panel entry');
+	// n8n's review (2026-11-17): the codex "node" is <package name>.<node name>, never the bare package name.
+	const Cls = { Meisim, MeisimTrigger, MeisimPollTrigger }[name];
+	ok(codex.node === require(path.join(__dirname, '..', 'package.json')).name + '.' + new Cls().description.name, name + ' codex node is <package>.<node name>, not ' + codex.node);
 }
 // What the package tells n8n to load is what the build made.
 const pkg = require(path.join(__dirname, '..', 'package.json'));
